@@ -4,14 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { loadDoneDates, isDone, dateToISO } from "@/lib/progress";
 
-type DayItem = {
-  dateISO: string;
-  day: number;
-  status: "done" | "today" | "locked" | "open";
-  x: number; // posição em %
-  y: number; // posição em px
-  buddy?: string; // emoji placeholder de mascote/personagem
-};
+type Status = "done" | "today" | "open" | "locked";
+
+type Tile =
+  | { kind: "day"; dateISO: string; day: number; status: Status }
+  | { kind: "extra"; id: string; title: string; side: "left" | "right"; locked: boolean };
 
 function startOfDay(d: Date) {
   const x = new Date(d);
@@ -20,22 +17,26 @@ function startOfDay(d: Date) {
 }
 
 function sameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
 function daysInMonth(year: number, monthIndex0: number) {
   return new Date(year, monthIndex0 + 1, 0).getDate();
 }
 
+function monthLabelPt(monthIndex0: number) {
+  const date = new Date(2026, monthIndex0, 1);
+  return date.toLocaleDateString("pt-BR", { month: "long" });
+}
+
 export default function Home() {
   const year = 2026;
-  const monthIndex0 = 0; // janeiro
-  const monthLabel = "Janeiro";
+  const monthIndex0 = 0; // janeiro (por enquanto fixo; depois colocamos navegação por mês)
+  const totalDays = daysInMonth(year, monthIndex0);
 
+  // janela de 15 dias (tipo Duolingo ~18)
+  const PAGE_SIZE = 15;
+  const [pageStartDay, setPageStartDay] = useState(1); // 1..totalDays
   const [doneDates, setDoneDates] = useState<string[]>([]);
 
   useEffect(() => {
@@ -45,232 +46,190 @@ export default function Home() {
   const today = startOfDay(new Date());
   const todayISO = dateToISO(today);
 
-  const total = daysInMonth(year, monthIndex0);
+  function clampStartDay(n: number) {
+    const maxStart = Math.max(1, totalDays - PAGE_SIZE + 1);
+    return Math.min(Math.max(1, n), maxStart);
+  }
 
-  const items: DayItem[] = useMemo(() => {
-    // Trilhezinha sinuosa:
-    // - y cresce a cada dia
-    // - x oscila (seno) para formar “caminho”
-    // Ajusta esses números se quiser mais “curva” ou mais “espaço”
-    const stepY = 92; // distância vertical entre dias (px)
-    const amplitude = 28; // quão para esquerda/direita vai (em %)
-    const baseX = 50; // centro
+  const tiles: Tile[] = useMemo(() => {
+    const start = clampStartDay(pageStartDay);
+    const end = Math.min(totalDays, start + PAGE_SIZE - 1);
 
-    const buddies = ["🦁", "🐑", "🧢", "🐘", "🦒", "🐧", "🐢", "🦜", "🐬", "🐰"]; // placeholders
+    const arr: Tile[] = [];
+    let sideFlip: "left" | "right" = "right";
 
-    const arr: DayItem[] = [];
-    for (let d = 1; d <= total; d++) {
+    for (let d = start; d <= end; d++) {
       const date = new Date(year, monthIndex0, d);
       const dateISO = dateToISO(date);
 
       const done = isDone(dateISO, doneDates);
+      let status: Status = "locked";
 
-      let status: DayItem["status"] = "locked";
       if (date < today) status = done ? "done" : "open";
       if (sameDay(date, today)) status = done ? "done" : "today";
       if (date > today) status = "locked";
 
-      const t = (d - 1) / Math.max(1, total - 1); // 0..1
-      const wave = Math.sin(t * Math.PI * 3.2); // mais voltas
-      const x = baseX + wave * amplitude;
-      const y = 120 + (d - 1) * stepY;
+      arr.push({ kind: "day", day: d, dateISO, status });
 
-      // Coloca “mascote” a cada 5 dias (só pra dar vida)
-      const buddy = d % 5 === 0 ? buddies[(d / 5) % buddies.length] : undefined;
-
-      arr.push({ dateISO, day: d, status, x, y, buddy });
+      // a cada 4 dias, coloca um desafio extra (igual você descreveu)
+      if (d % 4 === 0 && d !== end) {
+        // trava o desafio se o último dia anterior ainda estiver locked (ou seja, futuro)
+        const locked = date > today; // simples por agora
+        arr.push({
+          kind: "extra",
+          id: `extra-${year}-${monthIndex0 + 1}-${d}`,
+          title: "Desafio extra",
+          side: sideFlip,
+          locked,
+        });
+        sideFlip = sideFlip === "right" ? "left" : "right";
+      }
     }
+
     return arr;
-  }, [doneDates, monthIndex0, year, today, total]);
+  }, [pageStartDay, doneDates, totalDays, monthIndex0, year, today]);
 
-  // Altura total do “mapa”
-  const mapHeight = useMemo(() => {
-    const last = items[items.length - 1];
-    return (last?.y ?? 300) + 180;
-  }, [items]);
+  const monthLabel = monthLabelPt(monthIndex0);
 
-  // Caminho SVG passando “perto” dos pontos
-  const pathD = useMemo(() => {
-    if (items.length === 0) return "";
-    // converte % para um viewport fixo (0..1000)
-    const toX = (pct: number) => (pct / 100) * 1000;
-    const points = items.map((it) => ({
-      x: toX(it.x),
-      y: it.y,
-    }));
+  // UI helpers
+  function DayButton({ day, dateISO, status }: { day: number; dateISO: string; status: Status }) {
+    const clickable = status !== "locked";
+    const href = `/dia/${dateISO}`;
 
-    // Curva suave
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const cur = points[i];
-      const midY = (prev.y + cur.y) / 2;
-      d += ` C ${prev.x} ${midY}, ${cur.x} ${midY}, ${cur.x} ${cur.y}`;
-    }
-    return d;
-  }, [items]);
+    const base =
+      "flex h-14 w-14 items-center justify-center rounded-full border text-sm font-extrabold shadow-sm transition active:scale-95";
+
+    const cls =
+      status === "done"
+        ? `${base} bg-emerald-500 text-white border-emerald-600`
+        : status === "today"
+        ? `${base} bg-white text-gray-900 ring-4 ring-yellow-300`
+        : status === "open"
+        ? `${base} bg-white text-gray-900`
+        : `${base} bg-gray-200 text-gray-500 border-gray-300`;
+
+    const label =
+      status === "done" ? "✓" : status === "locked" ? "🔒" : day;
+
+    const content = <div className={cls} title={dateISO} aria-label={`Dia ${day}`}>{label}</div>;
+
+    return clickable ? <Link href={href}>{content}</Link> : content;
+  }
+
+  function ExtraCard({ side, locked }: { side: "left" | "right"; locked: boolean }) {
+    const align = side === "right" ? "justify-end" : "justify-start";
+    const cls =
+      "w-[240px] rounded-2xl border bg-white/70 p-4 shadow-sm " +
+      (locked ? "opacity-60" : "hover:bg-white");
+
+    // Por enquanto não clica (a gente cria depois /desafio/[id])
+    return (
+      <div className={`flex ${align}`}>
+        <div className={cls}>
+          <p className="text-xs text-gray-600">Extra</p>
+          <p className="mt-1 text-sm font-bold">Desafio do dia</p>
+          <p className="mt-1 text-xs text-gray-700">
+            {locked ? "Bloqueado por enquanto" : "Toque para abrir (em breve)"}
+          </p>
+
+          <div className="mt-3 flex items-center gap-2">
+            <div className="rounded-xl bg-gray-100 px-2 py-1 text-xs">🎨 desenho</div>
+            <div className="rounded-xl bg-gray-100 px-2 py-1 text-xs">📖 leitura</div>
+            <div className="rounded-xl bg-gray-100 px-2 py-1 text-xs">🤝 bondade</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Zigue-zague Duolingo: alterna alinhamento de cada item
+  function rowAlign(i: number) {
+    return i % 2 === 0 ? "justify-start" : "justify-end";
+  }
+
+  const startShown = clampStartDay(pageStartDay);
+  const endShown = Math.min(totalDays, startShown + PAGE_SIZE - 1);
 
   return (
     <main className="mx-auto max-w-2xl p-4 sm:p-6">
-      {/* Cabeçalho */}
       <header className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs text-gray-700">Devocional Kids</p>
-          <h1 className="mt-1 text-2xl font-extrabold">Trilha de {monthLabel}</h1>
+          <h1 className="mt-1 text-2xl font-extrabold capitalize">{monthLabel} de {year}</h1>
           <p className="mt-1 text-sm text-gray-700">
             Hoje: <span className="font-semibold">{todayISO}</span>
           </p>
         </div>
 
-        {/* Perfil (placeholder) */}
-        <button className="rounded-xl border bg-white/70 px-3 py-2 text-sm font-semibold hover:bg-white">
+        <button className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-gray-50">
           Perfil
         </button>
       </header>
 
-      {/* MAPA LÚDICO */}
-      <section className="mt-5 overflow-hidden rounded-3xl border bg-gradient-to-b from-sky-200 via-sky-100 to-emerald-100 shadow-sm">
-        {/* topo decorativo */}
-        <div className="relative px-5 pt-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-gray-800">Caminho do mês</p>
-            <div className="rounded-full bg-white/60 px-3 py-1 text-xs text-gray-800">
-              {total} dias
-            </div>
-          </div>
+      {/* Controles (janela de 15 dias) */}
+      <section className="mt-4 flex items-center justify-between rounded-2xl border bg-white p-3 shadow-sm">
+        <button
+          className="rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+          disabled={startShown === 1}
+          onClick={() => setPageStartDay((s) => clampStartDay(s - PAGE_SIZE))}
+        >
+          ← Anterior
+        </button>
 
-          {/* nuvens simples */}
-          <div className="pointer-events-none absolute left-6 top-10 h-10 w-24 rounded-full bg-white/60 blur-[0.2px]" />
-          <div className="pointer-events-none absolute right-10 top-16 h-8 w-20 rounded-full bg-white/50 blur-[0.2px]" />
+        <div className="text-center">
+          <p className="text-xs text-gray-600">Mostrando</p>
+          <p className="text-sm font-semibold">
+            Dias {startShown} – {endShown}
+          </p>
         </div>
 
-        {/* área do mapa */}
-        <div className="relative" style={{ height: mapHeight }}>
-          {/* Caminho (estrada) */}
-          <svg
-            className="absolute inset-0"
-            width="100%"
-            height={mapHeight}
-            viewBox={`0 0 1000 ${mapHeight}`}
-            preserveAspectRatio="none"
-          >
-            {/* “sombra” da estrada */}
-            <path
-              d={pathD}
-              fill="none"
-              stroke="rgba(0,0,0,0.10)"
-              strokeWidth="36"
-              strokeLinecap="round"
-            />
-            {/* estrada */}
-            <path
-              d={pathD}
-              fill="none"
-              stroke="rgba(255,255,255,0.75)"
-              strokeWidth="28"
-              strokeLinecap="round"
-            />
-            {/* faixa pontilhada */}
-            <path
-              d={pathD}
-              fill="none"
-              stroke="rgba(0,0,0,0.12)"
-              strokeWidth="4"
-              strokeDasharray="10 14"
-              strokeLinecap="round"
-            />
-          </svg>
+        <button
+          className="rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+          disabled={endShown === totalDays}
+          onClick={() => setPageStartDay((s) => clampStartDay(s + PAGE_SIZE))}
+        >
+          Próximo →
+        </button>
+      </section>
 
-          {/* Pontos (dias) */}
-          {items.map((it) => {
-            const clickable = it.status !== "locked";
-            const href = `/dia/${it.dateISO}`;
-
-            const ring =
-              it.status === "today"
-                ? "ring-4 ring-yellow-300"
-                : it.status === "done"
-                ? "ring-4 ring-emerald-300"
-                : "";
-
-            const bg =
-              it.status === "done"
-                ? "bg-emerald-500 text-white"
-                : it.status === "today"
-                ? "bg-white text-gray-900"
-                : it.status === "open"
-                ? "bg-white text-gray-900"
-                : "bg-gray-200 text-gray-500";
-
-            const badge =
-              it.status === "done" ? "✓" : it.status === "locked" ? "🔒" : it.day;
-
-            const node = (
-              <div
-                className="absolute -translate-x-1/2"
-                style={{ left: `${it.x}%`, top: it.y }}
-              >
-                {/* mascote/char aparecendo em alguns pontos */}
-                {it.buddy ? (
-                  <div className="mb-2 flex justify-center">
-                    <div className="rounded-full bg-white/70 px-2 py-1 text-lg shadow-sm">
-                      {it.buddy}
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="flex items-center justify-center">
-                  <div
-                    className={[
-                      "flex h-14 w-14 items-center justify-center rounded-full border font-extrabold shadow-sm",
-                      bg,
-                      ring,
-                      clickable ? "cursor-pointer" : "cursor-not-allowed opacity-80",
-                    ].join(" ")}
-                    title={`${it.dateISO}`}
-                    aria-label={`Dia ${it.day}`}
-                  >
-                    {badge}
+      {/* Trilha “botões” (Duolingo-like) */}
+      <section className="mt-5 rounded-3xl border bg-gradient-to-b from-sky-200 via-sky-100 to-emerald-100 p-5 shadow-sm">
+        <div className="space-y-4">
+          {tiles.map((t, idx) => (
+            <div key={t.kind === "day" ? t.dateISO : t.id} className={`flex ${rowAlign(idx)}`}>
+              {t.kind === "day" ? (
+                <div className="flex items-center gap-3">
+                  {/* bolinha */}
+                  <DayButton day={t.day} dateISO={t.dateISO} status={t.status} />
+                  {/* label pequeno */}
+                  <div className="min-w-[160px]">
+                    <p className="text-sm font-semibold">Dia {t.day}</p>
+                    <p className="text-xs text-gray-700">
+                      {t.status === "done"
+                        ? "Concluído"
+                        : t.status === "today"
+                        ? "Hoje"
+                        : t.status === "open"
+                        ? "Disponível"
+                        : "Bloqueado"}
+                    </p>
                   </div>
                 </div>
-
-                <div className="mt-2 text-center text-xs font-semibold text-gray-800">
-                  Dia {it.day}
-                </div>
-
-                <div className="mt-0.5 text-center text-[11px] text-gray-700">
-                  {it.status === "done"
-                    ? "Concluído"
-                    : it.status === "today"
-                    ? "Hoje"
-                    : it.status === "open"
-                    ? "Disponível"
-                    : "Bloqueado"}
-                </div>
-              </div>
-            );
-
-            return clickable ? (
-              <Link key={it.dateISO} href={href}>
-                {node}
-              </Link>
-            ) : (
-              <div key={it.dateISO}>{node}</div>
-            );
-          })}
-
-          {/* “grama” no rodapé */}
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-emerald-300/70 to-transparent" />
+              ) : (
+                <ExtraCard side={t.side} locked={t.locked} />
+              )}
+            </div>
+          ))}
         </div>
       </section>
 
       <p className="mt-4 text-xs text-gray-600">
-        Próximo passo: colocar personagens aparecendo na trilha (em vez de emoji), e a Home já
-        mostrar “missão do dia” como no estilo do app que você mandou.
+        Próximo passo: swipe (arrastar) em vez de botões, e “Desafio extra” abrindo uma tela com missão.
       </p>
     </main>
   );
 }
+
 
 
 
