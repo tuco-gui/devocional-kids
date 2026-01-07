@@ -1,0 +1,12 @@
+{
+  "name": "devocional-kids",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w apps/web",
+    "build:web": "npm run build -w apps/web",
+    "start:web": "npm run start -w apps/web"
+  }
+}
