@@ -125,6 +125,27 @@ export default function Home() {
     // Por enquanto não clica (a gente cria depois /desafio/[id])
     return (
       <div className={`flex ${align}`}>
+        <Link
+          href={`/desafio/${locked ? "bloqueado" : "missao-" + Date.now()}`}
+          className={cls}
+        >
+          <p className="text-xs text-gray-600">Extra</p>
+          <p className="mt-1 text-sm font-bold">Desafio do dia</p>
+          <p className="mt-1 text-xs text-gray-700">
+            {locked ? "Bloqueado por enquanto" : "Toque para abrir"}
+          </p>
+    
+          <div className="mt-3 flex items-center gap-2">
+            <div className="rounded-xl bg-gray-100 px-2 py-1 text-xs">🎨 desenho</div>
+            <div className="rounded-xl bg-gray-100 px-2 py-1 text-xs">📖 leitura</div>
+            <div className="rounded-xl bg-gray-100 px-2 py-1 text-xs">🤝 bondade</div>
+          </div>
+        </Link>
+      </div>
+    );
+    
+    return (
+      <div className={`flex ${align}`}>
         <div className={cls}>
           <p className="text-xs text-gray-600">Extra</p>
           <p className="mt-1 text-sm font-bold">Desafio do dia</p>
