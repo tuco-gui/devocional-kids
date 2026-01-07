@@ -8,6 +8,9 @@ type DayItem = {
   dateISO: string;
   day: number;
   status: "done" | "today" | "locked" | "open";
+  x: number; // posição em %
+  y: number; // posição em px
+  buddy?: string; // emoji placeholder de mascote/personagem
 };
 
 function startOfDay(d: Date) {
@@ -30,7 +33,7 @@ function daysInMonth(year: number, monthIndex0: number) {
 
 export default function Home() {
   const year = 2026;
-  const monthIndex0 = 0; // 0 = janeiro (por enquanto fixo; depois a gente navega mês)
+  const monthIndex0 = 0; // janeiro
   const monthLabel = "Janeiro";
 
   const [doneDates, setDoneDates] = useState<string[]>([]);
@@ -42,8 +45,18 @@ export default function Home() {
   const today = startOfDay(new Date());
   const todayISO = dateToISO(today);
 
+  const total = daysInMonth(year, monthIndex0);
+
   const items: DayItem[] = useMemo(() => {
-    const total = daysInMonth(year, monthIndex0);
+    // Trilhezinha sinuosa:
+    // - y cresce a cada dia
+    // - x oscila (seno) para formar “caminho”
+    // Ajusta esses números se quiser mais “curva” ou mais “espaço”
+    const stepY = 92; // distância vertical entre dias (px)
+    const amplitude = 28; // quão para esquerda/direita vai (em %)
+    const baseX = 50; // centro
+
+    const buddies = ["🦁", "🐑", "🧢", "🐘", "🦒", "🐧", "🐢", "🦜", "🐬", "🐰"]; // placeholders
 
     const arr: DayItem[] = [];
     for (let d = 1; d <= total; d++) {
@@ -52,113 +65,213 @@ export default function Home() {
 
       const done = isDone(dateISO, doneDates);
 
-      // Regras:
-      // - Passado: open (se não feito) ou done
-      // - Hoje: today (se não feito) ou done
-      // - Futuro: locked
       let status: DayItem["status"] = "locked";
-
       if (date < today) status = done ? "done" : "open";
       if (sameDay(date, today)) status = done ? "done" : "today";
       if (date > today) status = "locked";
 
-      arr.push({ dateISO, day: d, status });
+      const t = (d - 1) / Math.max(1, total - 1); // 0..1
+      const wave = Math.sin(t * Math.PI * 3.2); // mais voltas
+      const x = baseX + wave * amplitude;
+      const y = 120 + (d - 1) * stepY;
+
+      // Coloca “mascote” a cada 5 dias (só pra dar vida)
+      const buddy = d % 5 === 0 ? buddies[(d / 5) % buddies.length] : undefined;
+
+      arr.push({ dateISO, day: d, status, x, y, buddy });
     }
     return arr;
-  }, [doneDates, monthIndex0, year, today]);
+  }, [doneDates, monthIndex0, year, today, total]);
+
+  // Altura total do “mapa”
+  const mapHeight = useMemo(() => {
+    const last = items[items.length - 1];
+    return (last?.y ?? 300) + 180;
+  }, [items]);
+
+  // Caminho SVG passando “perto” dos pontos
+  const pathD = useMemo(() => {
+    if (items.length === 0) return "";
+    // converte % para um viewport fixo (0..1000)
+    const toX = (pct: number) => (pct / 100) * 1000;
+    const points = items.map((it) => ({
+      x: toX(it.x),
+      y: it.y,
+    }));
+
+    // Curva suave
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const cur = points[i];
+      const midY = (prev.y + cur.y) / 2;
+      d += ` C ${prev.x} ${midY}, ${cur.x} ${midY}, ${cur.x} ${cur.y}`;
+    }
+    return d;
+  }, [items]);
 
   return (
-    <main className="mx-auto max-w-2xl p-6">
+    <main className="mx-auto max-w-2xl p-4 sm:p-6">
       {/* Cabeçalho */}
-      <header className="flex items-start justify-between">
+      <header className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs text-gray-600">Devocional Kids</p>
-          <h1 className="mt-1 text-2xl font-bold">Trilha de {monthLabel}</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Toque no dia de hoje para fazer o devocional.
+          <p className="text-xs text-gray-700">Devocional Kids</p>
+          <h1 className="mt-1 text-2xl font-extrabold">Trilha de {monthLabel}</h1>
+          <p className="mt-1 text-sm text-gray-700">
+            Hoje: <span className="font-semibold">{todayISO}</span>
           </p>
         </div>
 
-        {/* botão de perfil (placeholder) */}
-        <button className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50">
+        {/* Perfil (placeholder) */}
+        <button className="rounded-xl border bg-white/70 px-3 py-2 text-sm font-semibold hover:bg-white">
           Perfil
         </button>
       </header>
 
-      {/* Trilha */}
-      <section className="mt-6 rounded-2xl border bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold">Dias do mês</p>
-          <p className="text-xs text-gray-600">Hoje: {todayISO}</p>
+      {/* MAPA LÚDICO */}
+      <section className="mt-5 overflow-hidden rounded-3xl border bg-gradient-to-b from-sky-200 via-sky-100 to-emerald-100 shadow-sm">
+        {/* topo decorativo */}
+        <div className="relative px-5 pt-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-800">Caminho do mês</p>
+            <div className="rounded-full bg-white/60 px-3 py-1 text-xs text-gray-800">
+              {total} dias
+            </div>
+          </div>
+
+          {/* nuvens simples */}
+          <div className="pointer-events-none absolute left-6 top-10 h-10 w-24 rounded-full bg-white/60 blur-[0.2px]" />
+          <div className="pointer-events-none absolute right-10 top-16 h-8 w-20 rounded-full bg-white/50 blur-[0.2px]" />
         </div>
 
-        <div className="mt-4 space-y-3">
-          {items.map((it, idx) => {
-            const isClickable = it.status !== "locked";
+        {/* área do mapa */}
+        <div className="relative" style={{ height: mapHeight }}>
+          {/* Caminho (estrada) */}
+          <svg
+            className="absolute inset-0"
+            width="100%"
+            height={mapHeight}
+            viewBox={`0 0 1000 ${mapHeight}`}
+            preserveAspectRatio="none"
+          >
+            {/* “sombra” da estrada */}
+            <path
+              d={pathD}
+              fill="none"
+              stroke="rgba(0,0,0,0.10)"
+              strokeWidth="36"
+              strokeLinecap="round"
+            />
+            {/* estrada */}
+            <path
+              d={pathD}
+              fill="none"
+              stroke="rgba(255,255,255,0.75)"
+              strokeWidth="28"
+              strokeLinecap="round"
+            />
+            {/* faixa pontilhada */}
+            <path
+              d={pathD}
+              fill="none"
+              stroke="rgba(0,0,0,0.12)"
+              strokeWidth="4"
+              strokeDasharray="10 14"
+              strokeLinecap="round"
+            />
+          </svg>
+
+          {/* Pontos (dias) */}
+          {items.map((it) => {
+            const clickable = it.status !== "locked";
             const href = `/dia/${it.dateISO}`;
 
-            // “zig-zag” simples: alterna alinhamento
-            const align = idx % 2 === 0 ? "justify-start" : "justify-end";
+            const ring =
+              it.status === "today"
+                ? "ring-4 ring-yellow-300"
+                : it.status === "done"
+                ? "ring-4 ring-emerald-300"
+                : "";
 
-            const label =
+            const bg =
               it.status === "done"
-                ? "Concluído"
+                ? "bg-emerald-500 text-white"
                 : it.status === "today"
-                ? "Hoje"
+                ? "bg-white text-gray-900"
                 : it.status === "open"
-                ? "Disponível"
-                : "Bloqueado";
+                ? "bg-white text-gray-900"
+                : "bg-gray-200 text-gray-500";
 
-            const bubble = (
-              <div className={`flex ${align}`}>
-                <div className="flex items-center gap-3">
-                  {/* Linha (trilha) */}
-                  <div className="h-10 w-1 rounded-full bg-gray-100" />
+            const badge =
+              it.status === "done" ? "✓" : it.status === "locked" ? "🔒" : it.day;
 
-                  {/* Bolinha */}
+            const node = (
+              <div
+                className="absolute -translate-x-1/2"
+                style={{ left: `${it.x}%`, top: it.y }}
+              >
+                {/* mascote/char aparecendo em alguns pontos */}
+                {it.buddy ? (
+                  <div className="mb-2 flex justify-center">
+                    <div className="rounded-full bg-white/70 px-2 py-1 text-lg shadow-sm">
+                      {it.buddy}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex items-center justify-center">
                   <div
                     className={[
-                      "flex h-12 w-12 items-center justify-center rounded-full border text-sm font-bold",
-                      it.status === "done" ? "bg-gray-900 text-white" : "",
-                      it.status === "today" ? "bg-white" : "",
-                      it.status === "open" ? "bg-white" : "",
-                      it.status === "locked" ? "bg-gray-100 text-gray-500" : "",
+                      "flex h-14 w-14 items-center justify-center rounded-full border font-extrabold shadow-sm",
+                      bg,
+                      ring,
+                      clickable ? "cursor-pointer" : "cursor-not-allowed opacity-80",
                     ].join(" ")}
-                    aria-label={`Dia ${it.day} - ${label}`}
-                    title={`${it.dateISO} • ${label}`}
+                    title={`${it.dateISO}`}
+                    aria-label={`Dia ${it.day}`}
                   >
-                    {it.status === "done" ? "✓" : it.status === "locked" ? "🔒" : it.day}
+                    {badge}
                   </div>
+                </div>
 
-                  {/* Texto */}
-                  <div className="min-w-[140px]">
-                    <p className="text-sm font-semibold">Dia {it.day}</p>
-                    <p className="text-xs text-gray-600">{label}</p>
-                  </div>
+                <div className="mt-2 text-center text-xs font-semibold text-gray-800">
+                  Dia {it.day}
+                </div>
+
+                <div className="mt-0.5 text-center text-[11px] text-gray-700">
+                  {it.status === "done"
+                    ? "Concluído"
+                    : it.status === "today"
+                    ? "Hoje"
+                    : it.status === "open"
+                    ? "Disponível"
+                    : "Bloqueado"}
                 </div>
               </div>
             );
 
-            return isClickable ? (
-              <Link key={it.dateISO} href={href} className="block">
-                {bubble}
+            return clickable ? (
+              <Link key={it.dateISO} href={href}>
+                {node}
               </Link>
             ) : (
-              <div key={it.dateISO} className="opacity-70">
-                {bubble}
-              </div>
+              <div key={it.dateISO}>{node}</div>
             );
           })}
+
+          {/* “grama” no rodapé */}
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-emerald-300/70 to-transparent" />
         </div>
       </section>
 
-      {/* Observação */}
-      <p className="mt-6 text-xs text-gray-600">
-        Depois a gente vai colocar: navegação por meses, mascote na trilha, XP, medalhas e amigos.
+      <p className="mt-4 text-xs text-gray-600">
+        Próximo passo: colocar personagens aparecendo na trilha (em vez de emoji), e a Home já
+        mostrar “missão do dia” como no estilo do app que você mandou.
       </p>
     </main>
   );
 }
+
 
 
 
