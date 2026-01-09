@@ -24,3 +24,11 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Fix rápido: inputs com texto legível */
+input, textarea, select {
+  color: #111827; /* gray-900 */
+}
+input::placeholder, textarea::placeholder {
+  color: #9CA3AF; /* gray-400 */
+}

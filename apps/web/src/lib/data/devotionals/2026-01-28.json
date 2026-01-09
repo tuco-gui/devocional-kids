@@ -1,0 +1,29 @@
+{
+  "dateISO": "2026-01-28",
+  "dateLabel": "28 de janeiro",
+  "bibleReadingRef": "Mateus 4:20–22",
+  "title": "Um passo de obediência por dia",
+  "storyArcId": "arc-2026-turma-01",
+  "episodeNumber": 7,
+  "recap": "Ontem aprendemos sobre: um passo de obediência por dia.",
+  "storyText": "Hoje a turma aprendeu que Jesus chama pessoas comuns para viver coisas extraordinárias.\n\nObedecer nem sempre é fácil, mas Deus nos ajuda quando a gente dá o primeiro passo.\n\nPense: qual pequeno passo de obediência você pode dar hoje?",
+  "talkAbout": [
+    "O que significa obedecer a Jesus?",
+    "Qual é um pequeno passo que você pode dar hoje?",
+    "Quem pode te ajudar a obedecer a Deus?"
+  ],
+  "prayer": "Jesus, me ajuda a ouvir sua voz e obedecer com alegria. Amém.",
+  "activity": "Faça um desenho do seu ‘primeiro passo’ com Jesus e escreva uma frase de coragem.",
+  "character": {
+    "id": "davi",
+    "name": "Davi",
+    "age": 10,
+    "description": "Curioso e cheio de perguntas.",
+    "imageAlt": ""
+  },
+  "mascot": {
+    "id": "leao",
+    "name": "Leão",
+    "imageAlt": ""
+  }
+}

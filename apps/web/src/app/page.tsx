@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import ProfileMenu from "@/components/ProfileMenu";
 import { useEffect, useMemo, useState } from "react";
-import { loadDoneDates, isDone, dateToISO } from "@/lib/progress";
+import { loadDoneDates, isDone, dateToISO, formatDateBR } from "@/lib/progress";
 
 type Status = "done" | "today" | "open" | "locked";
 
@@ -126,7 +127,7 @@ export default function Home() {
     return (
       <div className={`flex ${align}`}>
         <Link
-          href={`/desafio/${locked ? "bloqueado" : "missao-" + Date.now()}`}
+          href={`/desafio/`}
           className={cls}
         >
           <p className="text-xs text-gray-600">Extra</p>
@@ -178,13 +179,11 @@ export default function Home() {
           <p className="text-xs text-gray-700">Devocional Kids</p>
           <h1 className="mt-1 text-2xl font-extrabold capitalize">{monthLabel} de {year}</h1>
           <p className="mt-1 text-sm text-gray-700">
-            Hoje: <span className="font-semibold">{todayISO}</span>
+            Hoje: <span className="font-semibold">{formatDateBR(today)}</span>
           </p>
         </div>
 
-        <button className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-gray-50">
-          Perfil
-        </button>
+        <Link href="/perfil" className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold hover:bg-gray-50">Perfil</Link>
       </header>
 
       {/* Controles (janela de 15 dias) */}

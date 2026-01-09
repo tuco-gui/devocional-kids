@@ -41,3 +41,8 @@ export function dateToISO(date: Date) {
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
+
+
+export function formatDateBR(date: Date) {
+  return date.toLocaleDateString('pt-BR');
+}
