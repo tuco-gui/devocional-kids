@@ -1,91 +1,104 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type MeResponse =
-  | { ok: true; user: { id: string; nickname: string; avatar_json: any } }
-  | { ok: false; error: string };
-
-function dicebearUrl(avatarJson: any) {
-  const base = "https://api.dicebear.com/7.x/avataaars/svg";
-  const seed = String(avatarJson?.seed || "devocional-kids");
-  const params = new URLSearchParams();
-  params.set("seed", seed);
-  return `${base}?${params.toString()}`;
-}
+type MeUser = {
+  id: string;
+  nickname: string;
+  avatar_json?: any;
+};
 
 export default function EditarPerfilPage() {
   const router = useRouter();
-  const [me, setMe] = useState<MeResponse | null>(null);
+  const [me, setMe] = useState<MeUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function loadMe() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/me", { cache: "no-store" });
+      const j = await res.json();
+      if (!res.ok || !j?.ok) {
+        router.push("/login");
+        return;
+      }
+      setMe(j.user);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    (async () => {
-      const r = await fetch("/api/auth/me", { cache: "no-store" });
-      const j = (await r.json()) as MeResponse;
-      setMe(j);
-      if (!j.ok) router.replace("/login");
-    })();
-  }, [router]);
-
-  const avatarSrc = useMemo(() => {
-    if (!me || !me.ok) return "";
-    return dicebearUrl(me.user.avatar_json);
-  }, [me]);
+    loadMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.replace("/login");
+    router.push("/login");
+  }
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-xl p-6">
+        <div className="rounded-2xl border bg-white p-6">
+          <div className="text-lg font-semibold">Editar perfil</div>
+          <div className="mt-2 text-sm text-gray-600">Carregando...</div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-6 py-10">
-      <div className="mx-auto max-w-3xl rounded-2xl border bg-white p-6 shadow-sm">
+    <div className="mx-auto max-w-xl p-6">
+      <div className="rounded-2xl border bg-white p-6">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xl font-extrabold">Editar perfil</div>
-            <div className="text-sm text-gray-600">Avatar e foto (foto: em seguida com Storage).</div>
+            <div className="text-lg font-semibold">Editar perfil</div>
+            <div className="mt-1 text-xs text-gray-500">
+              Avatar e foto (foto: em breve via Supabase Storage).
+            </div>
           </div>
 
           <button
             onClick={logout}
-            className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+            className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
           >
             Sair
           </button>
         </div>
 
-        <div id="avatar" className="mt-6 rounded-2xl border p-5">
-          <div className="mb-3 text-sm font-bold">Avatar</div>
+        <div className="mt-6 rounded-2xl border p-5">
+          <div className="text-sm font-semibold">Avatar</div>
 
-          <div className="flex flex-wrap items-center gap-5">
-            <div className="h-24 w-24 overflow-hidden rounded-full border bg-white">
-              {avatarSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarSrc} alt="Avatar" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-3xl">🙂</div>
-              )}
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="h-20 w-20 overflow-hidden rounded-full border bg-white">
+              {/* Preview simples: se vier SVG/base64 no futuro, troca aqui.
+                  Por enquanto só mostra um placeholder limpo (sem emoji). */}
+              <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
+                avatar
+              </div>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <button
-                className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
-                onClick={() => alert("Editor de avatar: vamos plugar aqui (o que já estava funcionando).")}
+                onClick={() => router.push("/perfil/avatar")}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
               >
                 Editar avatar
               </button>
 
               <button
-                className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
                 onClick={() => alert("Upload de foto: a gente liga isso em seguida (Supabase Storage).")}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
               >
                 Carregar foto
               </button>
 
               <button
-                className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
                 onClick={() => router.back()}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
               >
                 Voltar
               </button>
